@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
+	_ "time/tzdata" // Import tzdata to embed timezone data
 )
 
 const alertDuration = 2000
@@ -87,9 +88,13 @@ func init() {
 
 func main() {
 	for {
-		now := time.Now()
-		log.Println("Monitoring APM Started at:", now)
-		err := monitorAPM()
+		location, err := time.LoadLocation("Asia/Tehran")
+		if err != nil {
+			log.Fatalf("Error loading time zone: %v", err)
+		}
+		now := time.Now().In(location)
+		log.Printf("Monitoring APM Started at: %s", now)
+		err = monitorAPM()
 		log.Println("Monitoring APM Finished...")
 		if err != nil {
 			log.Println("Error monitoring APM:", err)

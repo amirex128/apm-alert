@@ -1,18 +1,19 @@
-FROM ubuntu:latest
+FROM golang:latest
 
-# Set the non-interactive mode for tzdata installation
-ENV DEBIAN_FRONTEND=noninteractive
+WORKDIR /app
 
-WORKDIR /root
 
-# Copy necessary files
-COPY ./apm-alert /root/apm-alert
-COPY ./.env /root/.env
+COPY ./apm-alert /app/apm-alert
+COPY ./.env /app/.env
+COPY ./zoneinfo.zip /app/zoneinfo.zip
+ENV ZONEINFO /app/zoneinfo.zip
+ENV TZ=Asia/Tehran
 
-# Install tzdata for time zone data
 RUN apt-get update && \
     apt-get install -y tzdata && \
-    rm -rf /var/lib/apt/lists/* && \
-    chmod +x /root/apm-alert
+    ln -fs /usr/share/zoneinfo/Asia/Tehran /etc/localtime && \
+    echo "Asia/Tehran" > /etc/timezone && \
+    dpkg-reconfigure --frontend noninteractive tzdata && \
+    chmod +x /app/apm-alert
 
-CMD ["/root/apm-alert"]
+CMD ["/app/apm-alert"]

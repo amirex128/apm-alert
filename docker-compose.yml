@@ -2,6 +2,12 @@ version: '3.8'
 
 services:
   apm-alert:
-    image: apm-alert:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: apm-alert
     restart: always
+    environment:
+      - TZ=Asia/Tehran
+      - ZONEINFO=/app/zoneinfo.zip
+
