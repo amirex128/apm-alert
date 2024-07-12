@@ -14,7 +14,7 @@ import (
 	"github.com/joho/godotenv"
 )
 
-const alertDuration = 500
+const alertDuration = 2000
 
 var (
 	lastSMSTime time.Time
@@ -100,6 +100,7 @@ func main() {
 
 func monitorAPM() error {
 	query := createElasticQuery()
+	log.Printf("Start With : %s/%s/_search\n", queryURL, indexPattern)
 	fullQueryURL := fmt.Sprintf("%s/%s/_search", queryURL, indexPattern)
 	req, err := http.NewRequest("POST", fullQueryURL, bytes.NewBuffer(query))
 	if err != nil {
