@@ -1,0 +1,7 @@
+version: '3.8'
+
+services:
+  apm-alert:
+    image: apm-alert:latest
+    container_name: apm-alert
+    restart: always
