@@ -93,12 +93,19 @@ func main() {
 			log.Fatalf("Error loading time zone: %v", err)
 		}
 		now := time.Now().In(location)
-		log.Printf("Monitoring APM Started at: %s", now)
-		err = monitorAPM()
-		log.Println("Monitoring APM Finished...")
-		if err != nil {
-			log.Println("Error monitoring APM:", err)
+
+		if now.Hour() >= 7 && now.Hour() < 24 {
+			log.Printf("Monitoring APM Started at: %s", now)
+			err := monitorAPM()
+			log.Println("Monitoring APM Finished...")
+			if err != nil {
+				log.Println("Error monitoring APM:", err)
+			}
+		} else {
+			log.Printf("Current time %s is outside of monitoring hours. Skipping monitoring.", now)
+			time.Sleep(25 * time.Minute)
 		}
+
 		time.Sleep(5 * time.Minute)
 	}
 }
