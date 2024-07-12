@@ -7,7 +7,26 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"sync"
 	"time"
+)
+
+var (
+	lastSMSTime time.Time
+	mutex       sync.Mutex
+)
+
+type SMSRequest struct {
+	OtpID        string   `json:"OtpId"`
+	ReplaceToken []string `json:"ReplaceToken"`
+	SenderNumber string   `json:"SenderNumber"`
+	MobileNumber string   `json:"MobileNumber"`
+}
+
+var (
+	sender   = "10000000002027"
+	receiver = "09024809750"
+	smsKey   = "your_sms_api_key"
 )
 
 type APMResponse struct {
@@ -79,6 +98,7 @@ func monitorAPM() error {
 		}
 	}
 
+	sendSmsNow := false
 	for name, durations := range transactionDurations {
 		var totalDuration float64
 		for _, duration := range durations {
@@ -86,10 +106,14 @@ func monitorAPM() error {
 		}
 		averageDuration := totalDuration / float64(len(durations))
 		if averageDuration > 500 {
+			sendSmsNow = true
 			log.Printf("Transaction Name: %s, Average Latency: %.2f ms\n", name, averageDuration)
 		}
 	}
 
+	if sendSmsNow {
+		sendSMS("673")
+	}
 	return nil
 }
 
@@ -127,4 +151,53 @@ func createElasticQuery() []byte {
 
 	queryJSON, _ := json.Marshal(query)
 	return queryJSON
+}
+func sendSMS(code string) {
+	mutex.Lock()
+	defer mutex.Unlock()
+
+	currentTime := time.Now()
+
+	// Check if the last SMS was sent within the last 30 minutes
+	if currentTime.Sub(lastSMSTime) < 30*time.Minute {
+		fmt.Println("SMS not sent. Last SMS was sent less than 30 minutes ago.")
+		return
+	}
+
+	url := "https://api.limosms.com/api/sendpatternmessage"
+	smsRequest := SMSRequest{
+		OtpID:        code,
+		ReplaceToken: []string{},
+		SenderNumber: sender,
+		MobileNumber: receiver,
+	}
+
+	jsonData, err := json.Marshal(smsRequest)
+	if err != nil {
+		fmt.Printf("Failed to marshal JSON: %v\n", err)
+		return
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		fmt.Printf("Failed to create request: %v\n", err)
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("ApiKey", smsKey)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Printf("Failed to send SMS: %v\n", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusOK {
+		fmt.Println("SMS sent successfully")
+		lastSMSTime = currentTime // Update the last SMS send time
+	} else {
+		fmt.Printf("Failed to send SMS. Status code: %d\n", resp.StatusCode)
+	}
 }
