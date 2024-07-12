@@ -7,8 +7,11 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"sync"
 	"time"
+
+	"github.com/joho/godotenv"
 )
 
 var (
@@ -24,9 +27,9 @@ type SMSRequest struct {
 }
 
 var (
-	sender   = "10000000002027"
-	receiver = "09024809750"
-	smsKey   = "your_sms_api_key"
+	sender   string
+	receiver string
+	smsKey   string
 )
 
 type APMResponse struct {
@@ -46,8 +49,29 @@ type Histogram struct {
 	Values []float64 `json:"values"`
 }
 
-// 192.168.200.184:9200
 const queryURL = "http://192.168.1.100:9299/apm-7.17.10-metric-2024.07.12/_search"
+
+func init() {
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatalf("Error loading .env file")
+	}
+
+	smsKey = os.Getenv("SMS_KEY")
+	if smsKey == "" {
+		log.Fatalf("SMS_KEY not set in .env file")
+	}
+
+	sender = os.Getenv("SENDER_NUMBER")
+	if sender == "" {
+		log.Fatalf("SENDER_NUMBER not set in .env file")
+	}
+
+	receiver = os.Getenv("RECEIVER_NUMBER")
+	if receiver == "" {
+		log.Fatalf("RECEIVER_NUMBER not set in .env file")
+	}
+}
 
 func main() {
 	for {
@@ -146,12 +170,13 @@ func createElasticQuery() []byte {
 			},
 		},
 		"_source": []string{"transaction.name", "transaction.duration.histogram.values"},
-		"size":    20000,
+		"size":    10000,
 	}
 
 	queryJSON, _ := json.Marshal(query)
 	return queryJSON
 }
+
 func sendSMS(code string) {
 	mutex.Lock()
 	defer mutex.Unlock()
