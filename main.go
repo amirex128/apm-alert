@@ -14,6 +14,8 @@ import (
 	"github.com/joho/godotenv"
 )
 
+const alertDuration = 500
+
 var (
 	lastSMSTime time.Time
 	mutex       sync.Mutex
@@ -27,9 +29,11 @@ type SMSRequest struct {
 }
 
 var (
-	sender   string
-	receiver string
-	smsKey   string
+	sender       string
+	receiver     string
+	smsKey       string
+	queryURL     string
+	indexPattern string
 )
 
 type APMResponse struct {
@@ -48,8 +52,6 @@ type APMResponse struct {
 type Histogram struct {
 	Values []float64 `json:"values"`
 }
-
-const queryURL = "http://192.168.1.100:9299/apm-7.17.10-metric-2024.07.12/_search"
 
 func init() {
 	err := godotenv.Load()
@@ -71,6 +73,16 @@ func init() {
 	if receiver == "" {
 		log.Fatalf("RECEIVER_NUMBER not set in .env file")
 	}
+
+	queryURL = os.Getenv("QUERY_URL")
+	if queryURL == "" {
+		log.Fatalf("QUERY_URL not set in .env file")
+	}
+
+	indexPattern = os.Getenv("INDEX_PATTERN")
+	if indexPattern == "" {
+		log.Fatalf("INDEX_PATTERN not set in .env file")
+	}
 }
 
 func main() {
@@ -88,7 +100,8 @@ func main() {
 
 func monitorAPM() error {
 	query := createElasticQuery()
-	req, err := http.NewRequest("POST", queryURL, bytes.NewBuffer(query))
+	fullQueryURL := fmt.Sprintf("%s/%s/_search", queryURL, indexPattern)
+	req, err := http.NewRequest("POST", fullQueryURL, bytes.NewBuffer(query))
 	if err != nil {
 		return fmt.Errorf("error creating HTTP request: %v", err)
 	}
@@ -129,7 +142,7 @@ func monitorAPM() error {
 			totalDuration += duration
 		}
 		averageDuration := totalDuration / float64(len(durations))
-		if averageDuration > 500 {
+		if averageDuration > alertDuration {
 			sendSmsNow = true
 			log.Printf("Transaction Name: %s, Average Latency: %.2f ms\n", name, averageDuration)
 		}
@@ -185,7 +198,7 @@ func sendSMS(code string) {
 
 	// Check if the last SMS was sent within the last 30 minutes
 	if currentTime.Sub(lastSMSTime) < 30*time.Minute {
-		fmt.Println("SMS not sent. Last SMS was sent less than 30 minutes ago.")
+		log.Println("SMS not sent. Last SMS was sent less than 30 minutes ago.")
 		return
 	}
 
