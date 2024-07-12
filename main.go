@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"sync"
 	"time"
@@ -16,6 +17,7 @@ import (
 )
 
 const alertDuration = 2000
+const alertLowDuration = 1500
 
 var (
 	lastSMSTime time.Time
@@ -35,6 +37,7 @@ var (
 	smsKey       string
 	queryURL     string
 	indexPattern string
+	alertzyKey   string // Add this for Alertzy Account Key
 )
 
 type APMResponse struct {
@@ -83,6 +86,11 @@ func init() {
 	indexPattern = os.Getenv("INDEX_PATTERN")
 	if indexPattern == "" {
 		log.Fatalf("INDEX_PATTERN not set in .env file")
+	}
+
+	alertzyKey = os.Getenv("ALERTZY_KEY")
+	if alertzyKey == "" {
+		log.Fatalf("ALERTZY_KEY not set in .env file")
 	}
 }
 
@@ -157,7 +165,11 @@ func monitorAPM() error {
 		averageDuration := totalDuration / float64(len(durations))
 		if averageDuration > alertDuration {
 			sendSmsNow = true
-			log.Printf("Transaction Name: %s, Average Latency: %.2f ms\n", name, averageDuration)
+			sendPushNotification("APM Alert High", fmt.Sprintf("APM Alert: %s has an average latency of %.2f ms", name, averageDuration))
+			log.Printf("Transaction Name: %s, Average Latency High: %.2f ms\n", name, averageDuration)
+		} else if averageDuration > alertLowDuration {
+			sendPushNotification("APM Alert Medium", fmt.Sprintf("APM Alert: %s has an average latency of %.2f ms", name, averageDuration))
+			log.Printf("Transaction Name: %s, Average Latency Medium: %.2f ms\n", name, averageDuration)
 		}
 	}
 
@@ -201,6 +213,39 @@ func createElasticQuery() []byte {
 
 	queryJSON, _ := json.Marshal(query)
 	return queryJSON
+}
+
+func sendPushNotification(title, message string) {
+	baseURL := "https://alertzy.app/send"
+	params := url.Values{}
+	params.Add("accountKey", alertzyKey)
+	params.Add("title", title)
+	params.Add("group", "APM")
+	params.Add("message", message)
+	params.Add("priority", "1")
+
+	fullURL := fmt.Sprintf("%s?%s", baseURL, params.Encode())
+
+	req, err := http.NewRequest("POST", fullURL, nil)
+	if err != nil {
+		fmt.Printf("Failed to create request: %v\n", err)
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Printf("Failed to send push notification: %v\n", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusOK {
+		fmt.Println("Push notification sent successfully")
+	} else {
+		fmt.Printf("Failed to send push notification. Status code: %d\n", resp.StatusCode)
+	}
 }
 
 func sendSMS(code string) {
